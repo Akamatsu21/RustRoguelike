@@ -80,11 +80,12 @@ fn main()
 
     system::set_fps(FPS_LIMIT);
 
-    let player = Entity::new(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, '@', colors::WHITE);
+    let player = Entity::new(0, 0, '@', colors::WHITE);
     let npc = Entity::new(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', colors::YELLOW);
     let mut entities = [player, npc];
 
-    let game = Game {map: create_map()};
+    let mut game = Game::new();
+    game.create_map(&mut entities[0]);
 
     while !graphics.window.window_closed()
     {

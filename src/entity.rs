@@ -5,10 +5,10 @@ use crate::game::Game;
 #[derive(Debug)]
 pub struct Entity
 {
-    x: i32,
-    y: i32,
-    c: char,
-    color: Color
+    pub x: i32,
+    pub y: i32,
+    pub c: char,
+    pub color: Color
 }
 
 impl Entity
