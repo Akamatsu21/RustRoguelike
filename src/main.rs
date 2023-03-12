@@ -5,6 +5,7 @@ use tcod::console::*;
 use tcod::colors;
 use tcod::map::{FovAlgorithm, Map as FovMap};
 use tcod::system;
+use crate::entity::Entity;
 use crate::game::*;
 
 use colors::Color;
@@ -111,16 +112,45 @@ fn render(graphics: &mut Graphics, game: &mut Game, fov_recompute: bool)
         }
     }
 
-    for entity in game.entities.iter()
+    let mut entities_to_draw: Vec<&Entity> =
+        game.entities
+            .iter()
+            .filter(
+                |e| graphics.fov.is_in_fov(e.pos().0, e.pos().1))
+            .collect();
+    entities_to_draw.sort_by(|e1, e2| {e1.blocking.cmp(&e2.blocking)});
+    for entity in entities_to_draw.iter()
     {
-        if graphics.fov.is_in_fov(entity.pos().0, entity.pos().1)
-        {
-            entity.draw(&mut graphics.canvas);
-        }
+        entity.draw(&mut graphics.canvas);
+    }
+
+    graphics.window.set_default_foreground(colors::WHITE);
+    if let Some(stats) = game.get_player().stats
+    {
+        graphics.window.print_ex(1, SCREEN_HEIGHT - 2, BackgroundFlag::None, TextAlignment::Left,
+            format!("HP: {}/{}", stats.hp, stats.max_hp));
     }
 
     blit(&graphics.canvas, (0, 0), (MAP_WIDTH, MAP_HEIGHT),
          &mut graphics.window,(0, 0), 1.0, 1.0);
+}
+
+fn monster_turn(id: usize, graphics: &Graphics, game: &mut Game)
+{
+    let (player, monster) = game.get_player_and_monster(id);
+    let (m_x, m_y) = monster.pos();
+    if graphics.fov.is_in_fov(m_x, m_y)
+    {
+        if monster.distance_to(player) >= 2.0
+        {
+            let (p_x, p_y) = game.get_player().pos();
+            game.move_towards(id, p_x, p_y);
+        }
+        else if player.stats.map_or(false, |stats| stats.hp > 0)
+        {
+            monster.attack(player);
+        }
+    }
 }
 
 fn main()
@@ -161,10 +191,21 @@ fn main()
         graphics.window.flush();
 
         prev_pos = game.get_player().pos();
+        let player_action: PlayerAction = handle_input(&mut graphics, &mut game);
 
-        if handle_input(&mut graphics, &mut game) == PlayerAction::Exit
+        if player_action == PlayerAction::Exit
         {
             break;
+        }
+        else if game.get_player().alive && player_action == PlayerAction::TurnPass
+        {
+            for id in 0..game.get_entities_count()
+            {
+                if game.get_entity(id).ai.is_some()
+                {
+                    monster_turn(id, &graphics, &mut game);
+                }
+            }
         }
     }
 }

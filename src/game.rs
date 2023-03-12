@@ -7,7 +7,7 @@ use tcod::colors;
 use rand::Rng;
 use rect::Rect;
 use tile::Tile;
-use crate::entity::Entity;
+use crate::entity::*;
 
 pub const MAP_HEIGHT: i32 = 45;
 pub const MAP_WIDTH: i32 = 80;
@@ -28,8 +28,10 @@ impl Game
 {
     pub fn new() -> Self
     {
-        let mut player = Entity::new("Player", 0, 0, '@', colors::WHITE, true);
+        let mut player = Entity::new("Player", EntityClass::Player, 0, 0, '@', colors::WHITE, true);
         player.alive = true;
+        player.stats = Some(Stats {hp: 30, max_hp: 30, power: 5, defense: 2});
+
         Game {map: vec![], entities: vec![player]}
     }
 
@@ -93,11 +95,19 @@ impl Game
                 let mut monster =
                     if rand::random::<f32>() < 0.8
                     {
-                        Entity::new("Orc", x, y, 'o', colors::DESATURATED_GREEN, true)
+                        let mut orc = Entity::new("Orc", EntityClass::Monster, x, y, 'o', colors::DESATURATED_GREEN, true);
+                        orc.stats = Some(Stats {hp: 10, max_hp: 10, power: 3, defense: 0});
+                        orc.ai = Some(MonsterAi::Basic);
+
+                        orc
                     }
                     else
                     {
-                        Entity::new("Troll", x, y, 'T', colors::DARKER_GREEN, true)
+                        let mut troll = Entity::new("Troll", EntityClass::Monster, x, y, 'T', colors::DARKER_GREEN, true);
+                        troll.stats = Some(Stats {hp: 16, max_hp: 16, power: 4, defense: 1});
+                        troll.ai = Some(MonsterAi::Basic);
+
+                        troll
                     };
 
                 monster.alive = true;
@@ -106,18 +116,76 @@ impl Game
         }
     }
 
-    pub fn get_player(&mut self) -> &mut Entity
+    pub fn get_player(&self) -> &Entity
+    {
+        &self.entities[0]
+    }
+
+    pub fn get_player_mut(&mut self) -> &mut Entity
     {
         &mut self.entities[0]
     }
 
-    pub fn move_player(&mut self, dx: i32, dy: i32)
+    pub fn get_entity(&self, id: usize) -> &Entity
     {
-        let (x, y) = self.get_player().pos();
+        &self.entities[id]
+    }
+
+    pub fn get_entity_mut(&mut self, id: usize) -> &mut Entity
+    {
+        &mut self.entities[id]
+    }
+
+    pub fn get_entities_count(&self) -> usize
+    {
+        self.entities.len()
+    }
+
+    pub fn get_player_and_monster(&mut self, id: usize) -> (&mut Entity, &mut Entity)
+    {
+        assert!(id != 0);
+        let (first, second) = self.entities.split_at_mut(id);
+        (&mut first[0], &mut second[0])
+    }
+
+    pub fn move_by(&mut self, id: usize, dx: i32, dy: i32)
+    {
+        let (x, y) = self.get_entity(id).pos();
         if !self.is_tile_blocked(x + dx, y + dy)
         {
-            self.get_player().set_pos(x + dx, y + dy);
+            self.get_entity_mut(id).set_pos(x + dx, y + dy);
         }
+    }
+
+    pub fn move_towards(&mut self, id: usize, x: i32, y: i32)
+    {
+        let mut dx: i32 = x - self.get_entity(id).pos().0;
+        let mut dy: i32 = y - self.get_entity(id).pos().1;
+        let distance: f32 = ((dx.pow(2) + dy.pow(2)) as f32).sqrt();
+
+        dx = (dx as f32 / distance).round() as i32;
+        dy = (dy as f32 / distance).round() as i32;
+        self.move_by(id, dx, dy);
+    }
+
+    pub fn move_player(&mut self, dx: i32, dy: i32)
+    {
+        let target_x: i32 = self.get_player().pos().0 + dx;
+        let target_y: i32 = self.get_player().pos().1 + dy;
+        let enemy: Option<usize> = self.entities.iter().position(
+            |entity| entity.stats.is_some() && entity.pos() == (target_x, target_y));
+
+        match enemy
+        {
+            Some(id) =>
+            {
+                let (player, monster) = self.get_player_and_monster(id);
+                player.attack(monster);
+            },
+            None => self.move_by(0, dx, dy)
+        }
+
+        
     }
 
     pub fn create_map(&mut self)
@@ -147,7 +215,7 @@ impl Game
 
                 if rooms.is_empty()
                 {
-                    self.get_player().set_pos(center_x as i32, center_y as i32);
+                    self.get_player_mut().set_pos(center_x as i32, center_y as i32);
                 }
                 else
                 {
