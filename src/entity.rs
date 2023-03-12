@@ -1,35 +1,39 @@
 use tcod::colors::Color;
 use tcod::console::{Console, BackgroundFlag};
-use crate::game::Game;
 
 #[derive(Debug)]
 pub struct Entity
 {
-    pub x: i32,
-    pub y: i32,
-    pub c: char,
-    pub color: Color
+    name: String,
+    x: i32,
+    y: i32,
+    c: char,
+    color: Color,
+    pub blocking: bool,
+    pub alive: bool
 }
 
 impl Entity
 {
-    pub fn new(x: i32, y: i32, c: char, color: Color) -> Self
+    pub fn new(name: &str, x: i32, y: i32, c: char, color: Color, blocking: bool) -> Self
     {
-        Entity {x, y, c, color}
-    }
-
-    pub fn move_by(&mut self, dx: i32, dy: i32, game: &Game)
-    {
-        if game.map[(self.x + dx) as usize][(self.y + dy) as usize].passable
-        {
-            self.x += dx;
-            self.y += dy;
-        }
+        Entity {name: name.to_string(), x, y, c, color, blocking, alive: false}
     }
 
     pub fn draw(&self, canvas: &mut dyn Console)
     {
         canvas.set_default_foreground(self.color);
         canvas.put_char(self.x, self.y, self.c, BackgroundFlag::None);
+    }
+
+    pub fn pos(&self) -> (i32, i32)
+    {
+        (self.x, self.y)
+    }
+
+    pub fn set_pos(&mut self, x: i32, y: i32)
+    {
+        self.x = x;
+        self.y = y;
     }
 }

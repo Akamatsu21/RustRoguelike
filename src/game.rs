@@ -2,6 +2,8 @@ mod rect;
 mod tile;
 
 use std::cmp;
+use tcod::colors;
+
 use rand::Rng;
 use rect::Rect;
 use tile::Tile;
@@ -9,22 +11,41 @@ use crate::entity::Entity;
 
 pub const MAP_HEIGHT: i32 = 45;
 pub const MAP_WIDTH: i32 = 80;
-pub const ROOM_MIN_SIZE: i32 = 6;
-pub const ROOM_MAX_SIZE: i32 = 10;
-pub const MAX_ROOMS: i32 = 30;
+const ROOM_MIN_SIZE: i32 = 6;
+const ROOM_MAX_SIZE: i32 = 10;
+const MAX_ROOMS: i32 = 30;
+const ROOM_MAX_MONSTERS: i32 = 3;
 
 pub type Map = Vec<Vec<Tile>>;
 
 pub struct Game
 {
-    pub map: Map
+    pub map: Map,
+    pub entities: Vec<Entity>
 }
 
 impl Game
 {
     pub fn new() -> Self
     {
-        Game {map: vec![]}
+        let mut player = Entity::new("Player", 0, 0, '@', colors::WHITE, true);
+        player.alive = true;
+        Game {map: vec![], entities: vec![player]}
+    }
+
+    fn is_tile_blocked(&self, x: i32, y: i32) -> bool
+    {
+        if !self.map[x as usize][y as usize].passable
+        {
+            return true;
+        }
+
+        self.entities.iter().any(
+            |entity|
+            {
+                entity.pos() == (x, y) && entity.blocking
+            }
+        )
     }
 
     fn create_room(&mut self, rect: Rect)
@@ -58,7 +79,48 @@ impl Game
         }
     }
 
-    pub fn create_map(&mut self, player: &mut Entity)
+    fn spawn_entities(&mut self, room: Rect)
+    {
+        let monster_count: i32 = rand::thread_rng().gen_range(0..(ROOM_MAX_MONSTERS + 1));
+
+        for _ in 0..monster_count
+        {
+            let x = rand::thread_rng().gen_range((room.x1 + 1)..room.x2) as i32;
+            let y = rand::thread_rng().gen_range((room.y1 + 1)..room.y2) as i32;
+
+            if !self.is_tile_blocked(x, y)
+            {
+                let mut monster =
+                    if rand::random::<f32>() < 0.8
+                    {
+                        Entity::new("Orc", x, y, 'o', colors::DESATURATED_GREEN, true)
+                    }
+                    else
+                    {
+                        Entity::new("Troll", x, y, 'T', colors::DARKER_GREEN, true)
+                    };
+
+                monster.alive = true;
+                self.entities.push(monster);
+            }
+        }
+    }
+
+    pub fn get_player(&mut self) -> &mut Entity
+    {
+        &mut self.entities[0]
+    }
+
+    pub fn move_player(&mut self, dx: i32, dy: i32)
+    {
+        let (x, y) = self.get_player().pos();
+        if !self.is_tile_blocked(x + dx, y + dy)
+        {
+            self.get_player().set_pos(x + dx, y + dy);
+        }
+    }
+
+    pub fn create_map(&mut self)
     {
         self.map = vec![
             vec![
@@ -80,12 +142,12 @@ impl Game
             if !rooms.iter().any(|room| new_room.collides(room))
             {
                 self.create_room(new_room);
+                self.spawn_entities(new_room);
                 let (center_x, center_y) = new_room.center();
 
                 if rooms.is_empty()
                 {
-                    player.x = center_x as i32;
-                    player.y = center_y as i32;
+                    self.get_player().set_pos(center_x as i32, center_y as i32);
                 }
                 else
                 {
